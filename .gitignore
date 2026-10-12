@@ -218,3 +218,26 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- Project-specific ----
+# Raw and processed market data (download with the scripts in src/, never commit)
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+*.parquet
+*.dbn
+*.dbn.zst
+
+# Backtest output; regenerate with run_backtest.py
+results/*
+!results/.gitkeep
+
+# Local config and secrets (API keys go in .env, see .env.example)
+.env.local
+config.local.yaml
+
+# OS / editor files
+.DS_Store
+.vscode/
+.idea/
