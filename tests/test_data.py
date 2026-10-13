@@ -32,6 +32,7 @@ def definitions():
         "instrument_class": ["F", "F", "F", "S"],
         "instrument_id": [1, 1, 2, 99],
         "raw_symbol": ["ESH4", "ESH4", "ESM4", "ESH4-ESM4"],
+        "activation": [utc("2022-03-18 13:30")] * 4,
         "expiration": [utc("2024-03-15 13:30")] * 2 + [utc("2024-06-21 13:30")] * 2,
     })
 
@@ -298,3 +299,38 @@ def test_undated_open_interest_applies_to_previous_business_day():
     assert oi[pd.Timestamp("2010-06-11")] == 500
     assert latest_statistic(stats, STAT_SETTLEMENT, "settle").empty
     assert stat_dates(stats).notna().sum() == 3
+
+
+def test_reused_instrument_id_does_not_leak_bars_onto_expired_contract():
+    # Id 1 was ESH4 until it expired 2024-03-15, then Databento reused it for a calendar spread
+    # whose bars (prices around 27) must not be attributed to ESH4.
+    later = pd.DataFrame({
+        "ts_event": [utc("2024-04-10 15:00"), utc("2022-01-05 15:00")],
+        "instrument_id": [1, 1],
+        "open": [27.0, 9.0], "high": [28.0, 9.0], "low": [26.0, 9.0], "close": [27.5, 9.0],
+        "volume": [5, 5],
+    })
+    prices = build_contract_prices(definitions(), pd.concat([hourly(), later], ignore_index=True), statistics())
+    h4 = prices[prices["symbol"] == "ESH4"]
+    assert h4["date"].max() <= pd.Timestamp("2024-03-15")
+    assert h4["date"].min() >= pd.Timestamp("2022-03-18")      # nor bars from before it was listed
+    assert (h4["close"] > 50).all()
+
+
+def test_active_ids_use_each_contracts_own_listing_window():
+    from src.data import _active_ids
+    d = definitions()
+    assert _active_ids(d, pd.Timestamp("2024-01-01"), pd.Timestamp("2025-01-01")) == [1, 2]
+    assert _active_ids(d, pd.Timestamp("2024-04-01"), pd.Timestamp("2025-01-01")) == [2]    # ESH4 expired
+    assert _active_ids(d, pd.Timestamp("2021-01-01"), pd.Timestamp("2022-01-01")) == []     # not yet listed
+
+
+def test_repeated_definitions_with_shifted_listing_time_stay_one_contract():
+    # Databento sometimes repeats a definition with the listing time a day apart (seen for YM).
+    d = definitions()
+    extra = d.iloc[[0]].assign(activation=utc("2022-03-19 13:30"))
+    out = outright_definitions(pd.concat([d, extra], ignore_index=True))
+    h4 = out[out["symbol"] == "ESH4"]
+    assert len(h4) == 1 and h4.iloc[0]["listed"] == pd.Timestamp("2022-03-18")
+    prices = build_contract_prices(pd.concat([d, extra], ignore_index=True), hourly(), statistics())
+    assert not prices.duplicated(["instrument_id", "date"]).any()

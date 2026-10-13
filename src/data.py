@@ -109,15 +109,19 @@ def _utc_date(ts: pd.Series) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 def outright_definitions(defs: pd.DataFrame) -> pd.DataFrame:
-    """One row per outright futures contract (spreads dropped), with its expiry.
+    """One row per outright futures contract (spreads dropped): symbol, expiry, listing date.
 
     Databento repeats a definition on every session, so duplicates are removed.
+    Instrument ids are **reused** once a contract expires (an expired outright's id
+    can later belong to a calendar spread), so a contract is identified by its id
+    together with its listing and expiry dates, not by the id alone.
     """
     outright = defs[defs["instrument_class"] == "F"]
-    outright = outright.sort_values("ts_event").drop_duplicates("instrument_id", keep="last")
-    out = outright[["instrument_id", "raw_symbol", "expiration"]].rename(columns={"raw_symbol": "symbol"})
-    out["expiry"] = _utc_date(out.pop("expiration"))
-    return out.reset_index(drop=True)
+    out = outright[["instrument_id", "raw_symbol", "activation", "expiration"]].rename(
+        columns={"raw_symbol": "symbol"})
+    out = out.assign(listed=_utc_date(out.pop("activation")), expiry=_utc_date(out.pop("expiration")))
+    # The repeated definitions can disagree on the listing time by a day: keep the earliest.
+    return out.groupby(["instrument_id", "symbol", "expiry"], as_index=False)["listed"].min()
 
 
 def trade_date(ts: pd.Series) -> pd.Series:
@@ -175,6 +179,8 @@ def build_contract_prices(defs: pd.DataFrame, hourly: pd.DataFrame, stats: pd.Da
     """Join daily bars, expiry, settlement, volume and open interest for one product."""
     contracts = outright_definitions(defs)
     prices = daily_bars(hourly).merge(contracts, on="instrument_id", how="inner")  # inner drops spreads
+    # A reused instrument id also carries later contracts' bars; keep only the contract's own life.
+    prices = prices[(prices["date"] >= prices["listed"]) & (prices["date"] <= prices["expiry"])]
     for stat_type, column in ((STAT_SETTLEMENT, "settle"),
                               (STAT_CLEARED_VOLUME, "cleared_volume"),
                               (STAT_OPEN_INTEREST, "open_interest")):
@@ -248,11 +254,9 @@ def _concat(frames, columns):
 
 def _active_ids(defs, chunk_start, chunk_end):
     """Instrument ids of contracts listed at some point in [chunk_start, chunk_end)."""
-    latest = defs.sort_values("ts_event").drop_duplicates("instrument_id", keep="last")
-    activation = _utc_date(latest["activation"])
-    expiry = _utc_date(latest["expiration"])
-    live = latest[(activation < chunk_end) & (expiry >= chunk_start)]
-    return sorted(int(i) for i in live["instrument_id"])
+    contracts = outright_definitions(defs)
+    live = contracts[(contracts["listed"] < chunk_end) & (contracts["expiry"] >= chunk_start)]
+    return sorted(int(i) for i in live["instrument_id"].unique())
 
 
 def _fetch_year(dataset, root, year, schema, ids, start, end, cache_dir, force):

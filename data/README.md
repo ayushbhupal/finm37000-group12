@@ -29,8 +29,8 @@ instead built from hourly bars by CME trade date (see `date` below).
 | Column | Type | Description |
 |---|---|---|
 | `date` | datetime64 | CME **trade date**. A session opens at 17:00 Chicago time the evening before, so Sunday-evening trading belongs to Monday. Weekdays only. |
-| `symbol` | string | Exchange symbol, e.g. `ESH4` (H = March, M = June, U = September, Z = December; last digit = year). **Not unique across decades** (`ESH1` is 2011 and 2021); use `instrument_id` or `expiry` to identify a contract. |
-| `instrument_id` | uint32 | Databento's numeric contract id. Unique per contract; the safest join key. |
+| `symbol` | string | Exchange symbol, e.g. `ESH4` (H = March, M = June, U = September, Z = December; last digit = year). **Not unique across decades** (`ESH1` is 2011 and 2021); use `expiry` (with `symbol`) or `instrument_id` with `expiry` to identify a contract. |
+| `instrument_id` | uint32 | Databento's numeric contract id. **Not unique over time:** Databento reuses an id after a contract expires (for example, an expired `ESM1`'s id later belonged to a calendar spread), and bars outside a contract's listing-to-expiry life are dropped for that reason. Identify a contract by `instrument_id` plus `expiry`. |
 | `expiry` | datetime64 | Last trading day, from the contract definition (UTC date). Equity index futures expire on the third Friday of the quarterly month, except when
   that day is an exchange holiday (for example `ESM7` expires Thursday 2027-06-17, because
   Friday the 18th is the observed Juneteenth holiday). All expiries in the 2025 sample are third Fridays. |
@@ -99,3 +99,17 @@ Sample run, 2025-06-02 to 2025-06-06 (5 trade dates), all four products:
 Expiries are 2025-06-20 (M), 2025-09-19 (U) and 2025-12-19 (Z), all third Fridays. `RTYZ5` has
 only 2 rows because it barely traded that week. Dates are Monday to Friday only. For the
 front contract, `|close - settle| / settle` is at most 0.3%.
+
+A second real run covered the earliest data, 2010-06-07 to 2011-12-30 (RTY skipped, no contracts yet):
+
+| Product | Rows | Contracts | Missing `settle` | Missing `cleared_volume` / `open_interest` | Rows after expiry | Duplicate (id, date) |
+|---|---|---|---|---|---|---|
+| ES | 1,321 | 11 | 24 | 21 / 21 | 0 | 0 |
+| NQ | 1,009 | 11 | 21 | 17 / 17 | 0 | 0 |
+| YM | 957 | 10 | 17 | 17 / 17 | 0 | 0 |
+
+Missing `settle` rows are exchange holidays (9 dates, e.g. 2010-07-05, 2011-01-17), and the few missing
+open-interest rows are mostly expiry days. All non-expiry settlements are on valid ticks, and front-month
+`|close - settle| / settle` is at most 1.4%. This run is what exposed the reused-instrument-id, undated
+open interest and rounded-settlement issues described above.
+
