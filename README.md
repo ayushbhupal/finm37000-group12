@@ -50,9 +50,14 @@ pytest
 
 ## How to Run
 
-*Each step is a placeholder until its issue is merged.*
+*Each step except the data download is a placeholder until its issue is merged.*
 
 ```bash
+# Download raw daily data for every contract in the universe (needs DATABENTO_API_KEY).
+# Cached per product and year, so re-running does not re-download; --force refreshes.
+python -m src.data --config config.yaml
+# Writes data/raw/<ROOT>_daily.parquet; columns are described in data/README.md
+
 python run_backtest.py --config config.yaml
 # Results (metrics and plots) are written to ./results/
 ```
@@ -69,7 +74,7 @@ python run_backtest.py --config config.yaml
 ├── run_backtest.py     # single entry point
 ├── .env.example        # template for API keys (copy to .env)
 ├── data/
-│   ├── raw/            # downloaded contract data (git-ignored)
+│   ├── raw/            # <ROOT>_daily.parquet per product (git-ignored)
 │   └── processed/      # continuous series (git-ignored)
 ├── notebooks/          # exploration and EDA
 ├── src/
