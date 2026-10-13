@@ -21,40 +21,63 @@ Design, backtest, and evaluate a rules-based strategy that trades equity index f
 - **Contract rolling:** Systematic roll rule between expiries
 - **Evaluation:** Out-of-sample testing and comparison against a buy-and-hold benchmark
 
-## How to Run
+## Setup
 
-*Aspirational; this will be updated as the code is written.*
+Requires Python 3.10+.
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<tech-leader-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/suniltrivedi7/finm37000-group12.git
+cd finm37000-group12
 
-# 2. Install dependencies
+# 2. Create a virtual environment and install dependencies
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e .                 # makes `import src` work from notebooks and scripts
 
-# 3. Run the backtest
-python run_backtest.py --config config.yaml
+# 3. Add your Databento API key (only needed to download data)
+cp .env.example .env             # then edit .env; it is git-ignored
 
-# 4. Results (metrics and plots) are written to ./results/
+# 4. Check everything works
+pytest
 ```
 
-## Planned Repository Structure
+## How to Run
+
+*Each step is a placeholder until its issue is merged.*
+
+```bash
+python run_backtest.py --config config.yaml
+# Results (metrics and plots) are written to ./results/
+```
+
+## Repository Structure
 
 ```
 .
 ├── README.md
+├── CONTRIBUTING.md     # branch / PR workflow
 ├── requirements.txt
-├── config.yaml          # strategy and backtest parameters
-├── data/                # historical futures data (or download scripts)
+├── pyproject.toml      # makes src/ an installable package
+├── config.yaml         # strategy and backtest parameters
+├── run_backtest.py     # single entry point
+├── .env.example        # template for API keys (copy to .env)
+├── data/
+│   ├── raw/            # downloaded contract data (git-ignored)
+│   └── processed/      # continuous series (git-ignored)
+├── notebooks/          # exploration and EDA
 ├── src/
-│   ├── data.py          # data loading and cleaning
-│   ├── signals.py       # signal generation
-│   ├── portfolio.py     # position sizing and risk limits
-│   ├── backtest.py      # backtest engine
-│   └── analysis.py      # performance metrics and plots
+│   ├── contracts.py    # contract specs: multiplier, tick size, symbols
+│   ├── config.py       # loads config.yaml
+│   ├── data.py         # data loading and continuous contracts   (#3, #4)
+│   ├── signals.py      # signal generation                       (#6)
+│   ├── portfolio.py    # position sizing and risk limits         (#6)
+│   ├── backtest.py     # backtest engine                         (#7)
+│   └── analysis.py     # performance metrics and plots           (#8, #9)
 ├── tests/
-└── results/
+├── reports/figures/    # figures for the final report
+└── results/            # backtest output (git-ignored)
 ```
 
 ## Team

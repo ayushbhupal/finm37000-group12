@@ -1,0 +1,21 @@
+# Strategy and backtest parameters. Values are placeholders until issue #2
+# (strategy choice) and issue #4 (roll rule) are decided.
+universe: [ES, NQ, RTY, YM]
+start_date: "2010-01-01"
+end_date: "2025-12-31"
+
+roll:
+  rule: days_before_expiry   # or: volume_switch, open_interest_switch
+  days_before_expiry: 5
+  adjustment: back_adjusted  # or: ratio_adjusted, unadjusted
+
+costs:
+  commission_per_contract: 2.50  # USD, round-trip per side
+  slippage_ticks: 1
+
+sizing:
+  method: volatility_target
+  target_annual_vol: 0.10
+  max_gross_leverage: 3.0
+
+output_dir: results
