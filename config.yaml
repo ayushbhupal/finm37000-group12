@@ -1,8 +1,14 @@
-# Strategy and backtest parameters. Values are placeholders until issue #2
-# (strategy choice) and issue #4 (roll rule) are decided.
+# Strategy and backtest parameters. Strategy chosen in issue #2 (time-series
+# momentum with volatility targeting). Signal values are initial choices to be
+# tuned and stress-tested in issue #10; roll values await issue #4.
 universe: [ES, NQ, RTY, YM]
 start_date: "2010-01-01"
 end_date: "2025-12-31"
+
+signal:
+  method: time_series_momentum
+  lookback_days: 252         # trailing return window (about 12 months)
+  vol_lookback_days: 60      # window for the volatility estimate used in sizing
 
 roll:
   rule: days_before_expiry   # or: volume_switch, open_interest_switch

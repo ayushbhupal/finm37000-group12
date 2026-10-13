@@ -1,6 +1,12 @@
 # Strategy Research (Issue #2)
 
-Draft write-ups for each candidate strategy, to support the team vote in issue #2.
+**Decision (2026-10-13):** the team voted unanimously for **time-series momentum with
+volatility targeting**. The core universe stays ES, NQ, RTY and YM on daily data. A few
+international index futures (e.g., FESX, NKD) will be added in issue #10 as a robustness
+check, which would also make cross-sectional momentum testable later. Mean reversion and
+carry / calendar spreads are deferred as possible extensions.
+
+The write-ups below were drafted to support the vote, one per candidate strategy.
 Each write-up covers the hypothesis, data needed, expected edge and key risks.
 Claims about expected edge are qualitative priors from the academic and practitioner
 literature, not results from our own data. Issue #5 (EDA) and the backtest will test them.

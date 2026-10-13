@@ -13,13 +13,18 @@ Design, backtest, and evaluate a rules-based strategy that trades equity index f
 
 ## Strategy Overview
 
-*Aspirational; the specifics will be refined as the team's research progresses.*
+The team chose **time-series momentum with volatility targeting** (issue #2; write-ups of
+all candidates are in [docs/strategy_research.md](docs/strategy_research.md)). Parameter
+values are initial choices and will be tested in the robustness work (#10).
 
-- **Universe:** Liquid equity index futures contracts
-- **Signal:** To be decided (candidates: momentum / trend-following, mean reversion, carry or basis-based signals)
+- **Universe:** Core: ES, NQ, RTY and YM daily futures. Extension (#10): a few international index futures (e.g., FESX, NKD) as a robustness check
+- **Signal:** Time-series momentum. Each contract is long when its trailing return is positive and short when negative, using only data known at each date
 - **Position sizing:** Volatility-targeted sizing with leverage and margin limits
-- **Contract rolling:** Systematic roll rule between expiries
-- **Evaluation:** Out-of-sample testing and comparison against a buy-and-hold benchmark
+- **Contract rolling:** Systematic roll rule between expiries (to be finalized in #4)
+- **Evaluation:** Out-of-sample testing and comparison against a volatility-matched buy-and-hold benchmark
+
+Mean reversion, carry / calendar spreads and cross-sectional momentum were considered and
+set aside for now. They remain possible extensions once the core strategy works.
 
 ## Setup
 
