@@ -5,6 +5,12 @@ universe: [ES, NQ, RTY, YM]
 start_date: "2010-01-01"
 end_date: "2025-12-31"
 
+# Raw data download (issue #3). The universe and dates above are used as well.
+# Databento GLBX.MDP3 starts 2010-06-06, so an earlier start_date is clamped.
+data:
+  dataset: GLBX.MDP3
+  raw_dir: data/raw          # one <ROOT>_daily.parquet per product; git-ignored
+
 signal:
   method: time_series_momentum
   lookback_days: 252         # trailing return window (about 12 months)
