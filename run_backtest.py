@@ -26,7 +26,7 @@ def main() -> None:
         for root in config["universe"]
     }
     sig = signals.generate_signals(prices, config)
-    positions = portfolio.size_positions(sig, prices, config["sizing"])
+    positions = portfolio.size_positions(sig, prices, config)
     results = backtest.run_backtest(positions, prices, config)
     print(analysis.performance_summary(results["equity"]))
     analysis.make_figures(results, config["output_dir"])
