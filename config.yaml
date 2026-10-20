@@ -35,9 +35,14 @@ costs:
   commission_per_contract: 2.50  # USD, round-trip per side
   slippage_ticks: 1
 
+# Position sizing (issue #6). Inverse-vol weights scaled so the whole portfolio
+# targets target_annual_vol using the trailing covariance (signal.vol_lookback_days),
+# then capped by max_gross_leverage, then rounded to whole contracts.
 sizing:
   method: volatility_target
+  capital: 10000000            # USD; 4 big index contracts need this much for rounding to be fine
   target_annual_vol: 0.10
-  max_gross_leverage: 3.0
+  max_gross_leverage: 3.0      # sum of |notional| / capital
+  max_weight_per_asset: 1.5    # |notional| / capital for any one product
 
 output_dir: results
