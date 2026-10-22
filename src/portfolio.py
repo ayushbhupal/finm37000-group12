@@ -14,7 +14,8 @@ Method (``sizing.method: volatility_target``)
    ``max_gross_leverage``, and optionally any single weight at
    ``max_weight_per_asset``.
 4. Contracts: ``weight * capital / (settle * multiplier)``, rounded to the
-   nearest whole contract.
+   nearest whole contract. The leverage caps apply before this rounding, so the
+   rounded book can exceed ``max_gross_leverage`` slightly (by about one contract).
 
 All estimates on date ``t`` use data up to ``t`` only, matching the timing
 convention in ``src/signals.py``. There is no stop-loss: a trend rule already
@@ -34,9 +35,19 @@ DEFAULT_VOL_LOOKBACK = 60
 
 
 def settle_panel(prices: dict[str, pd.DataFrame], index: pd.Index) -> pd.DataFrame:
-    """Raw settlement of the held contract per product, forward-filled over holidays."""
-    settles = pd.DataFrame({root: df["settle"] for root, df in prices.items()})
-    return settles.reindex(index).ffill()
+    """Raw settlement of the contract held *after* each date's settle, forward-filled over holidays.
+
+    On a roll day the position moves to the next contract at that day's settle, so
+    it is priced at ``next_settle``; on other days it is the held contract's ``settle``.
+    """
+    panel = {}
+    for root, df in prices.items():
+        price = df["settle"]
+        if {"roll", "next_settle"} <= set(df.columns):
+            on_roll = df["roll"].fillna(False).astype(bool) & df["next_settle"].notna()
+            price = df["next_settle"].where(on_roll, price)
+        panel[root] = price
+    return pd.DataFrame(panel).reindex(index).ffill()
 
 
 def portfolio_vol(weights: pd.Series, cov: pd.DataFrame) -> float:
