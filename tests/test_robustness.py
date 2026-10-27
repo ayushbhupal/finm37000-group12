@@ -103,3 +103,101 @@ def test_load_or_run_grid_reuses_the_cache_until_the_config_changes(tmp_path, mo
     config["robustness"]["grid"]["lookback_days"] = [63, 126]       # a different grid
     robustness.load_or_run_grid({}, config, path)
     assert len(calls) == 2
+
+
+# --- sensitivity and regimes -------------------------------------------------
+
+GRID_COLUMNS = [robustness.label(v) for v in robustness.variants(
+    {"lookback_days": [63, 252], "skip_days": [0, 21], "vol_lookback_days": [20, 60]})]
+
+
+def test_variant_params_reads_labels_back():
+    params = robustness.variant_params(GRID_COLUMNS)
+    assert params.shape == (8, 3)
+    row = params.loc["lookback_days=252, skip_days=21, vol_lookback_days=20"]
+    assert row.tolist() == [252, 21, 20]
+
+
+def test_sharpe_table_is_one_variant_per_cell():
+    grid = pd.DataFrame({name: noise(0.001 * i, i) for i, name in enumerate(GRID_COLUMNS)})
+    table = robustness.sharpe_table(grid, "lookback_days", "vol_lookback_days", fixed={"skip_days": 0})
+    assert table.shape == (2, 2)
+    name = "lookback_days=252, skip_days=0, vol_lookback_days=60"
+    assert table.loc[252, 60] == pytest.approx(robustness.sharpe(grid[name]))
+
+
+def test_sharpe_table_limits_dates_and_demands_pinned_parameters():
+    grid = pd.DataFrame({name: noise(0.001, i) for i, name in enumerate(GRID_COLUMNS)})
+    with pytest.raises(ValueError, match="skip_days"):
+        robustness.sharpe_table(grid, "lookback_days", "vol_lookback_days")
+    full = robustness.sharpe_table(grid, "lookback_days", "vol_lookback_days", {"skip_days": 0})
+    late = robustness.sharpe_table(grid, "lookback_days", "vol_lookback_days", {"skip_days": 0}, start="2019-01-01")
+    assert not full.equals(late)
+
+
+def test_episode_table_sums_returns_and_finds_the_drawdown():
+    idx = pd.bdate_range("2020-01-01", periods=10)
+    ret = pd.DataFrame({"s": [0.0, 0.01, -0.02, -0.01, 0.01, 0, 0, 0, 0, 0.5], "late": [np.nan] * 5 + [0.01] * 5}, index=idx)
+    out = robustness.episode_table(ret, [{"name": "dip", "start": "2020-01-02", "end": "2020-01-07"},
+                                         {"name": "early", "start": "2020-01-01", "end": "2020-01-03"}])
+    assert out.loc["dip", ("return", "s")] == pytest.approx(-0.01)
+    assert out.loc["dip", ("max_drawdown", "s")] == pytest.approx(-0.03)
+    assert np.isnan(out.loc["early", ("return", "late")])      # that strategy had not started
+
+
+def test_label_periods_assigns_each_date_to_the_latest_start():
+    idx = pd.to_datetime(["2011-03-01", "2018-01-02", "2021-12-31", "2022-01-03"])
+    labels = robustness.label_periods(idx, [{"name": "a", "start": "2010-01-01"},
+                                            {"name": "b", "start": "2018-01-01"},
+                                            {"name": "c", "start": "2022-01-01"}])
+    assert labels.tolist() == ["a", "b", "b", "c"]
+
+
+def test_vol_regimes_label_a_calm_and_a_stormy_era():
+    r = noise(0, 8)
+    r[(r.index >= "2020-01-01") & (r.index < "2021-01-01")] *= 5      # a year of high volatility
+    labels = robustness.vol_regimes(r, 60, ["low", "medium", "high"])
+    assert labels.isna().sum() == 60                  # 59 days to build the window, plus one for the lag
+    assert (labels["2020-04-01":"2020-12-31"] == "high").all()
+    calm = labels[labels.index < "2019-10-01"].dropna()
+    assert (calm == "high").mean() < 0.25             # high labels in calm years are the exception
+
+
+def test_vol_regimes_are_known_the_day_before():
+    r = noise(0, 8)
+    shocked = r.copy()
+    shocked.iloc[-1] = 10.0                           # a huge move on the last day only
+    base = robustness.vol_regimes(r, 60, ["low", "medium", "high"])
+    assert robustness.vol_regimes(shocked, 60, ["low", "medium", "high"]).iloc[-1] == base.iloc[-1]
+
+
+def test_regime_summary_splits_days_and_sharpe_by_regime():
+    idx = pd.bdate_range("2020-01-01", periods=200)
+    ret = pd.DataFrame({"s": np.where(np.arange(200) < 100, 0.001, -0.001) + noise(0, 9, 0.002, idx).to_numpy()}, index=idx)
+    labels = pd.Series(np.where(np.arange(200) < 100, "calm", "stress"), index=idx)
+    out = robustness.regime_summary(ret, labels)
+    assert out.loc[("calm", "s"), "days"] == 100
+    assert out.loc[("calm", "s"), "sharpe"] > 0 > out.loc[("stress", "s"), "sharpe"]
+
+
+def test_margin_usage_scales_with_the_percentage():
+    results = pd.DataFrame({"margin_usage": [0.04, 0.08]})
+    out = robustness.margin_usage_table(results, base_pct=0.08, pcts=[0.04, 0.16])
+    assert out.loc[0.16, "peak_usage"] == pytest.approx(0.16)
+    assert out.loc[0.04, "mean_usage"] == pytest.approx(0.03)
+
+
+def test_variant_positions_override_the_signal_and_always_long_is_never_short():
+    index = pd.bdate_range("2023-01-02", periods=400)
+    price = 4000 * np.cumprod(1 + np.random.default_rng(0).normal(0, 0.01, 400))
+    es = pd.DataFrame({"settle": price, "ret": pd.Series(price, index=index).pct_change().to_numpy(),
+                       "pnl_points": pd.Series(price).diff().to_numpy(), "roll": False, "next_settle": np.nan},
+                      index=index)
+    config = {"signal": {"method": "time_series_momentum", "lookback_days": 60, "vol_lookback_days": 20},
+              "sizing": {"method": "volatility_target", "capital": 10_000_000, "target_annual_vol": 0.10,
+                         "max_gross_leverage": 3.0, "max_weight_per_asset": 1.5}}
+    momentum = robustness.variant_positions({"ES": es}, config, {"lookback_days": 120})
+    long_only = robustness.variant_positions({"ES": es}, config, {"lookback_days": 120}, always_long=True)
+    assert config["signal"]["lookback_days"] == 60                       # the caller's config is untouched
+    assert (momentum["ES"] != 0).sum() == (long_only["ES"] != 0).sum() > 0     # same warm-up
+    assert (long_only["ES"] >= 0).all()
