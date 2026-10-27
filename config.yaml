@@ -55,3 +55,16 @@ metrics:
 
 output_dir: results               # metric tables (CSV), git-ignored
 figures_dir: reports/figures      # PNG charts (issue #9), tracked in git unlike results/
+
+# Out-of-sample testing (issue #10). Every combination of the grid below is backtested
+# once over the full sample; parameters are then chosen on data before a cut-off and
+# judged on data after it. The signal block above is the pre-chosen default.
+robustness:
+  split_date: "2019-01-01"       # in-sample is before this date, out-of-sample from it
+  walk_forward:
+    first_test_year: 2017        # first year judged out of sample
+    min_train_years: 5           # history required before choosing parameters
+  grid:                          # keys are signal parameters
+    lookback_days: [63, 126, 189, 252, 378]
+    skip_days: [0, 21]
+    vol_lookback_days: [20, 60, 120]
